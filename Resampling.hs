@@ -38,7 +38,7 @@ downsampleWaveData newfs x = y
         p = truncate ((samplingFrequency x)/newfs)
         gwx' = iir_df2 lpf $ toList (gwdata x)
         lpf = butter 2 newfs (newfs/2) Low
-        stopGPSTime y = formatGPS $ fromGPS (startGPSTime x) + 1/newfs*fromIntegral (dim (gwdata x))
+        stopGPSTime y = formatGPS $ deformatGPS (startGPSTime x) + 1/newfs*fromIntegral (dim (gwdata x))
 
 
 
