@@ -4,11 +4,15 @@ module Resampling
 ( downsample
 , upsample
 , resample
+, downsampleWaveData
 ) where
 
+import HasKAL.SignalProcessingUtils.FilterH
 import HasKAL.SignalProcessingUtils.FilterType
 import HasKAL.SignalProcessingUtils.ButterWorth
-import Filter
+import HasKAL.TimeUtils.Function
+import HasKAL.WaveUtils.Data
+import Numeric.LinearAlgebra
 
 downsample :: Double -> Double -> [Double] -> [Double]
 downsample fs newfs x = y
@@ -24,6 +28,17 @@ upsample fs newfs x = undefined
 
 resample :: Double -> Double -> [Double] -> [Double]
 resample fs newfs x = undefined
+
+
+downsampleWaveData :: Double -> WaveData -> WaveData
+downsampleWaveData newfs x = y
+  where y = x
+        samplingFrequency y = newfs
+        gwdata y = fromList $ snd.unzip $ filter (\(n, _) -> n `mod` p==1) $ zip [1..] gwx'
+        p = truncate ((samplingFrequency x)/newfs)
+        gwx' = iir_df2 lpf $ toList (gwdata x)
+        lpf = butter 2 newfs (newfs/2) Low
+        stopGPSTime y = formatGPS $ fromGPS (startGPSTime x) + 1/newfs*fromIntegral (dim (gwdata x))
 
 
 
