@@ -36,14 +36,14 @@ main = do
 --  print $ samplingFrequency ligodata
 
   {- generate Injection signal -}
-  let injhrss = 1.0E-16
+  let injhrss = 1.0E-18
       srctype = mkSOURCE_TYPE_S5 "dfmr_A1B1G1.txt" 0.0 0.0 0.0 injhrss
       injgps = (877201788, 0) :: GPSTIME
       injdetresp = downsampleWaveData fs
                  $ injDetectorResponse LIGO_Hanford srctype injgps :: WaveData
 
   {- do injection -}
-  let injected = doInjection ligodata injdetresp
+  let injected = doInjection' ligodata injdetresp
 
   {- plot resutls -}
   HR.plot HR.LogXY HR.Line ("frequency",  "Spectrum") "Injection Test" "plot_injection.png" $ gwpsd (toList (subVector 0 (4*4096) (gwdata injected))) (truncate fs) fs
