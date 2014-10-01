@@ -31,7 +31,7 @@ main = do
       stopgps = formatGPS $ deformatGPS startgps + 1/fs*fromIntegral (length x)
 
   {- construct WaveData DataType -}
-  let ligodata = mkLIGOWaveData "h-of-t" fs startgps stopgps $ fromList x
+  let ligodata = mkLIGOHanfordWaveData "h-of-t" fs startgps stopgps $ fromList x
 
 --  print $ samplingFrequency ligodata
 
