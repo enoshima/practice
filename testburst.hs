@@ -34,6 +34,10 @@ import Data.Time
 
 
 main = do
+
+  {- setting search parameters -}
+  let sigma = 2.0 :: Double
+
   t1 <- getCurrentTime
   print "{- input data information -}"
   let fname = "H-H2_RDS_C03_L2-877201786-128.gwf"
@@ -116,9 +120,10 @@ main = do
       ntime = 140 :: Int
       fs2 = floor $ ((fromIntegral nfreq)/2) :: Int
 
-      nrefset = 50 :: Int
+      nrefset = 100 :: Int
       refpsd = snd $ gwpsdV (subVector 0 (nfreq*nrefset) (gwdata whnWaveData)) nfreq fs
-      refpsd2 = scale 2 $ subVector 0 fs2 refpsd
+      refpsd2 = scale sigma $ subVector 0 fs2 refpsd
+      refpsd2s= subVector 0 fs2 refpsd
 
   HR.plot HR.LogXY HR.Line ("frequency",  "Spectrum") "ref psd" "testburst_refpsd.png" ((0, 0), (0, 0))
     $ zip [0..] (toList refpsd2)
@@ -149,15 +154,18 @@ main = do
 
   let refpsds = snd $ gwpsdV (gwdata ligodatas) nfreq fs
       nu = flip (!!) 0 $ studentRayleighMon' MLE nset 0 numF (toList refpsds) noff
-      nufactor = map (\x-> studentThreshold 2.0 x) nu
+      nufactor = fromList $ map (\x-> 1/sigma*studentThreshold sigma x) nu
       snrMatPs = fromColumns
         $ map (\i->zipVectorWith (/)
         (
         subVector 0 fs2 $ snd $ gwpsdV (subVector (nfreq*i) nfreq (gwdata whnWaveData)) nfreq fs)
-        (fromList (zipWith (*) nufactor (toList refpsd)))
+        (zipVectorWith (*) nufactor refpsd2)
         ) [0..ntime-1]
       snrMats = (snrMatT, snrMatF, snrMatPs)
-  print nu
+
+  HR.plot HR.Linear HR.Line ("frequency [Hz]",  "nu factor") " " "testburst_nu.png" ((0, 0), (0, 0))
+    $ zip [0, 16..2048]  (toList nufactor)
+
 
   t15 <- getCurrentTime
   print "{- remove low frequency region from the spectrogram. -}"
@@ -173,23 +181,34 @@ main = do
   t17 <- getCurrentTime
   let (_, _, mg) = snrMat'
       (_, _, ms) = snrMats'
-  let thres4MG = Numeric.LinearAlgebra.find (<4.0) mg
-      thres4MS = Numeric.LinearAlgebra.find (<4.0) ms
-      mg4 = updateSpectrogramSpec snrMat' $ updateMatrixElement mg thres4MG
-      ms4 = updateSpectrogramSpec snrMats' $ updateMatrixElement ms thres4MS
+
+      normalizemg' = scale (1/(mg @@> (maxIndex mg))) mg
+      normalizems' = scale (1/(ms @@> (maxIndex ms))) ms
+
+  let thresNMG = Numeric.LinearAlgebra.find (<0.25) normalizemg'
+      thresNMS = Numeric.LinearAlgebra.find (<0.25) normalizems'
+      normalizemg = updateSpectrogramSpec snrMat' $ updateMatrixElement normalizemg' thresNMG (replicate (length thresNMG) 0.0)
+      normalizems = updateSpectrogramSpec snrMats' $ updateMatrixElement normalizems' thresNMS (replicate (length thresNMS) 0.0)
+  t18 <- getCurrentTime
+  print $ diffUTCTime t18 t17
+
+
+  let thres4MG = Numeric.LinearAlgebra.find (<3.0) mg
+      thres4MS = Numeric.LinearAlgebra.find (<3.0) ms
+      mg4 = updateSpectrogramSpec snrMat' $ updateMatrixElement mg thres4MG (replicate (length thres4MG) 0.0)
+      ms4 = updateSpectrogramSpec snrMats' $ updateMatrixElement ms thres4MS (replicate (length thres4MS) 0.0)
   t18 <- getCurrentTime
   print $ diffUTCTime t18 t17
 
   print "{- plot SNR-spectrogram -}"
-  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNR Spectrogram") "testburst_snrSpec.png" $ plotFormatedSpectogram snrMat'
-  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNRs Spectrogram") "testburst_snrSpec_student.png" $ plotFormatedSpectogram snrMats'
+  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNR Spectrogram") "testburst_snrSpec_sigma2.png" $ plotFormatedSpectogram snrMat'
+  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNRs Spectrogram") "testburst_snrSpec_student_sigma2.png" $ plotFormatedSpectogram snrMats'
 
-  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNR>5 Spectrogram") "testburst_snrSpec_t4.png" $ plotFormatedSpectogram mg4
-  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNRs>5 Spectrogram") "testburst_snrSpec_student_t4.png" $ plotFormatedSpectogram ms4
+  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNR>5 Spectrogram") "testburst_snrSpec_t3_sigma2.png" $ plotFormatedSpectogram mg4
+  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNRs>5 Spectrogram") "testburst_snrSpec_student_t3_sigma2.png" $ plotFormatedSpectogram ms4
 
-
-
-
+  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNR Spectrogram") "testburst_snrSpec_norm_thr025_sigma2.png" $ plotFormatedSpectogram normalizemg
+  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNRs Spectrogram") "testburst_snrSpec_nrm_student_thr025_sigma2.png" $ plotFormatedSpectogram normalizems
 
 
 plotFormatedSpectogram :: Spectrogram -> [(Double, Double, Double)]
@@ -199,18 +218,18 @@ plotFormatedSpectogram (tV, freqV, specgram) = do
   zip3 tV' freqV' (concat $ map (\x->toList x) $ toColumns specgram)
 
 
-updateMatrixElement :: Matrix Double -> [(Int, Int)] -> Matrix Double
-updateMatrixElement s w = runSTMatrix $ do
-  s' <- unsafeThawMatrix s
-  mapM_ (\x->unsafeWriteMatrix s' (fst x) (snd x) 0.0) w
-  return s'
-
+updateMatrixElement :: Matrix Double -> [(Int, Int)] -> [Double] -> Matrix Double
+updateMatrixElement s w x = runSTMatrix $ do
+  case length w == length x of
+    True -> do s' <- unsafeThawMatrix s
+               mapM_ (\i->unsafeWriteMatrix s' (fst (w!!i)) (snd (w!!i)) (x!!i)) [0..length w-1]
+               return s'
+    False -> error "should be same length"
 
 updateSpectrogramSpec :: Spectrogram -> Matrix Double -> Spectrogram
 updateSpectrogramSpec s m = (t, f, m)
   where (t, _, _) = s
         (_, f, _) = s
-
 
 
 
