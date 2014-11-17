@@ -1,0 +1,56 @@
+o 
+repaを使った行列演算は、「配列の要素を直接更新せずに、行列を変換する処理を組み合わせて、新しく作成する配列の要素を求める処理を記述する」という形で行います。repaでは、配列の要素を直接更新する関数は提供されていません。
+http://itpro.nikkeibp.co.jp/article/COLUMN/20120911/421921/?ST=develop&P=2
+
+o
+traverse
+        :: forall r sh sh' a b
+           ( Source r a
+           , Shape sh, Shape sh')
+        => Array r sh a                 -- ^ Source array.
+        -> (sh  -> sh')                 -- ^ Function to produce the extent of the result.
+        -> ((sh -> a) -> sh' -> b)      -- ^ Function to produce elements of the result.
+                                        --   It is passed a lookup function to get elements of the source.
+        -> Array D sh' b
+traverse関数の第1引数には、Array型を使って表現される任意の配列を渡します。第2引数には「配列の外部表現であるsh型の行列の形状（値）を取り、新たな外部表現であるsh'型の行列の形状を返す関数」を渡します。sh'型は、traverse関数を使った処理の結果を参照するのに必要なものです。第3引数は「配列の各要素に対して処理を行う関数」です。この関数は返り値として、sh'型の行列を外部表現として持つD型の配列を返します。
+
+Prelude Data.Array.Repa> let a = fromListUnboxed (ix3 3 3 3) [(1::Int)..27]
+Prelude Data.Array.Repa> a
+AUnboxed (((Z :. 3) :. 3) :. 3) (fromList [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27])
+
+Prelude Data.Array.Repa> let x = traverse a id (\_ (Z :. i :. j :. k) -> i)
+Prelude Data.Array.Repa> computeUnboxedP x
+AUnboxed (((Z :. 3) :. 3) :. 3) (fromList [0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2])
+
+traverse関数で「行列の形状を変更する必要がない処理」を行う場合には、第2引数にはid関数を渡し、第3引数には「行列の形状が変更されないことを想定した処理」を渡します。
+http://itpro.nikkeibp.co.jp/article/COLUMN/20120911/421921/?ST=develop&P=3
+
+o
+さて、ここまで「安全な関数」と「unsafeが付いた安全でない関数」がいくつか出てきました。両者の違いは、実は一つしかありません。安全な関数はindex関数を使って定義されているのに対し、安全でない関数はunsafeIndex関数を使って定義されています。
+
+　index関数とunsafeIndex関数の違いは、配列の範囲外参照に対する検査があるかどうかです。index関数では、配列の範囲外が参照されているかどうかを検査します。一方、unsafeIndex関数では、配列の範囲外参照は検査しません。
+
+　例えばU型の配列の場合、内部表現として使われている非ボックス化VectorのunsafeIndex関数が最終的に呼ばれます。非ボックス化VectorのunsafeIndex関数では、repaのunsafeIndex関数で意図している通り、配列の範囲外参照の検査を省略します（参考リンク1、参考リンク2、参考リンク3）。
+
+　配列の範囲外参照の検査が必要なのは、範囲外参照はsegmentation faultなどの予期しない動作を引き起こす可能性があるからです。
+
+　例えば、Data.Array.Repa.Repr.ForeignPtrモジュールで提供されているF型の配列では、ForeignPtr型を内部表現として使っているため、配列の範囲外に対する参照はポインタの範囲外に対する参照を意味します（参考リンク）。
+
+　このような配列の範囲外に対する参照は、segmentation faultなどの予期しない動作を引き起こす可能性があります。そこでrepaの配列では、通常は実行時に検査を行い、範囲外に対する参照を実行時エラーとすることで、範囲外参照を防いでいます。
+
+　ただし、こうした実行時の範囲外検査にはそれなりのコストがかかります。そこでtranspose関数やappend関数のように「安全であることが確認できている関数」の実装には、範囲外検査を省略した「安全でない代わりに効率的な関数」を利用しているのです。
+
+　範囲外検査の省略は、効率的ですがリスクもあります。安易にunsafeが付いた関数を使わず、最初は安全な関数を使って実装し、十分にテストを行いましょう。安全でない関数を使うのは、範囲外参照の可能性がないことを確認してからにすべきです。
+
+
+
+
+1 2 3
+4 5 6
+7 8 9
+10 11 12
+13 14 15
+16 17 18
+19 20 21
+22 23 24
+
