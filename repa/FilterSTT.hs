@@ -1,4 +1,4 @@
-
+{-# LANGUAGE BangPatterns #-}
 
 module FilterSTT
 (
@@ -53,7 +53,7 @@ pop' :: Double -> StateT (UV.Vector Double) IO ()
 pop' w0 = do
   w <- get
 --  let w' = UV.modify (\r -> UMV.unsafeWrite r 0 w0) (UV.backpermute w perm)
-  let w' = GV.cons w0 (UV.init w)
+  let !w' = GV.cons w0 (UV.init w)
   put w'
   return ()
 
