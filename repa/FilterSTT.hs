@@ -1,6 +1,6 @@
 
 
-module FIlterSTT
+module FilterSTT
 (
   iir
 , fir
@@ -45,7 +45,7 @@ iirState (b, a) v = do
 pop :: Double -> UV.Vector Int -> StateT (UV.Vector Double) IO ()
 pop w0 perm = do
   w <- get
-  let w' = UV.modify (\r -> UMV.unsafeWrite r 0 w0) (UV.backpermute w perm)
+  let w' = UV.modify (\r -> UMV.write r 0 w0) (UV.backpermute w perm)
   put w'
   return ()
 
@@ -63,8 +63,9 @@ firState b v = do
       perm = UV.fromList $ 0:[0..nb-2]
   UV.forM v $ \x -> do
     w <- get
-    let y = UV.sum (UV.zipWith (*) bv w)
     pop x perm
+    w <- get
+    let y = UV.sum (UV.zipWith (*) bv w)
     return y
 
 
