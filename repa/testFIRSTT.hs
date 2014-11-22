@@ -13,9 +13,9 @@ import Control.DeepSeq (deepseq)
 
 main :: IO()
 main = do
-  let x = take 10 $ randomRs (-1, 1) $ mkStdGen 1 :: [Double]
+  let x = take 102400 $ randomRs (-1, 1) $ mkStdGen 1 :: [Double]
       v = UV.fromList x
-      b = take 3 $ randomRs (-1, 1) $ mkStdGen 2 :: [Double]
+      b = take 2048 $ randomRs (-1, 1) $ mkStdGen 2 :: [Double]
   x `deepseq` return ()
   v `deepseq` return ()
   b `deepseq` return ()

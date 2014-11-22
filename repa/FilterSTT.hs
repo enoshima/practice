@@ -8,6 +8,7 @@ module FilterSTT
 
 import qualified Data.Vector.Unboxed.Mutable as UMV
 import qualified Data.Vector.Unboxed as UV
+import qualified Data.Vector.Generic as GV
 import Control.Monad.State
 
 
@@ -33,10 +34,9 @@ iirState (b, a) v = do
       na = length a
       nb = length b
       mn = max na nb
-      perm = UV.fromList $ 0:[0..na-2]
   UV.forM v $ \x -> do
     w <- get
-    pop (x - UV.sum (UV.zipWith (*) (UV.drop 1 av) (UV.take (mn-1) w))) perm
+    pop' (x - UV.sum (UV.zipWith (*) (UV.drop 1 av) (UV.take (mn-1) w)))
     w <- get
     let y = UV.sum $ UV.zipWith (*) bv w
     return y
@@ -45,9 +45,18 @@ iirState (b, a) v = do
 pop :: Double -> UV.Vector Int -> StateT (UV.Vector Double) IO ()
 pop w0 perm = do
   w <- get
-  let w' = UV.modify (\r -> UMV.write r 0 w0) (UV.backpermute w perm)
+  let w' = UV.modify (\r -> UMV.unsafeWrite r 0 w0) (UV.backpermute w perm)
   put w'
   return ()
+
+pop' :: Double -> StateT (UV.Vector Double) IO ()
+pop' w0 = do
+  w <- get
+--  let w' = UV.modify (\r -> UMV.unsafeWrite r 0 w0) (UV.backpermute w perm)
+  let w' = GV.cons w0 (UV.init w)
+  put w'
+  return ()
+
 
 
 fir :: [Double] -> UV.Vector Double -> IO (UV.Vector Double)
@@ -59,11 +68,9 @@ fir b v = evalStateT go w
 firState :: [Double] -> UV.Vector Double -> StateT (UV.Vector Double) IO (UV.Vector Double)
 firState b v = do
   let bv = UV.fromList b :: UV.Vector Double
-      nb = length b
-      perm = UV.fromList $ 0:[0..nb-2]
   UV.forM v $ \x -> do
     w <- get
-    pop x perm
+    pop' x
     w <- get
     let y = UV.sum (UV.zipWith (*) bv w)
     return y
