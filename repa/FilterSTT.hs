@@ -51,7 +51,7 @@ pop w0 perm = do
 
 pop' :: Double -> StateT (UV.Vector Double) IO ()
 pop' w0 = do
-  w <- get
+  !w <- get
 --  let w' = UV.modify (\r -> UMV.unsafeWrite r 0 w0) (UV.backpermute w perm)
   let !w' = GV.cons w0 (UV.init w)
   put w'
@@ -61,18 +61,18 @@ pop' w0 = do
 
 fir :: [Double] -> UV.Vector Double -> IO (UV.Vector Double)
 fir b v = evalStateT go w
-  where go = firState b v
-        w = UV.replicate nb 0 :: UV.Vector Double
-        nb = length b
+  where !go = firState b v
+        !w = UV.replicate nb 0 :: UV.Vector Double
+        !nb = length b
 
 firState :: [Double] -> UV.Vector Double -> StateT (UV.Vector Double) IO (UV.Vector Double)
 firState b v = do
-  let bv = UV.fromList b :: UV.Vector Double
+  let !bv = UV.fromList b :: UV.Vector Double
   UV.forM v $ \x -> do
-    w <- get
+    !w <- get
     pop' x
-    w <- get
-    let y = UV.sum (UV.zipWith (*) bv w)
+    !w <- get
+    let !y = UV.sum (UV.zipWith (*) bv w)
     return y
 
 
