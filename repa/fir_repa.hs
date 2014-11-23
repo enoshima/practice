@@ -19,7 +19,7 @@
 -- ghc -threaded -rtsopts -fllvm -L/usr/local/opt/llvm33/lib/llvm-3.3/lib/
 -- -eventlog
 --
--- ./fir_repa +RTS -N2 -l 
+-- ./fir_repa +RTS -N2 -l
 --
 -- Then run
 -- % threadscope fir_repa.eventlog
@@ -55,13 +55,9 @@ main = do
 --  t1 <- getCurrentTime
 --  fir0repa h w x
 --  t2 <- getCurrentTime
---	print $ diffUTCTime t2 t1
-	
-	
+--  print $ diffUTCTime t2 t1
 --  t3 <- getCurrentTime
   fftfilt vh vx
 --  t4 <- getCurrentTime
---	print $ diffUTCTime t4 t3
-	
-	
+--  print $ diffUTCTime t4 t3
 
