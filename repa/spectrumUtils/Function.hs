@@ -32,17 +32,16 @@ gwpsdCore method v nfft fs w
 
 gwpsdWelch :: UV.Vector Double -> Int -> Double -> WindowType -> IO (UV.Vector (Double, Double))
 gwpsdWelch v nfft fs w = do
-
   let !nv = UV.length v
       !maxitr = floor $ fromIntegral nv / fromIntegral nfft :: Int
       !wvlist = Prelude.map (applyWindow w) (takesV (replicate maxitr nfft) v)
   !oneArry <- go wvlist
-  !arry' <- computeP $ reshape (Z:.nfft:.maxitr) oneArry :: IO (Array U DIM2 Double)
+  !arry' <- computeP $ reshape (Z:.maxitr:.nfft) oneArry :: IO (Array U DIM2 Double)
   !arry <- computeP (Repa.transpose arry') :: IO (Array U DIM2 Double)
   !sumArry <- Repa.sumP arry :: IO(Array U DIM1 Double)
-  !out <- Repa.computeP (Repa.map (1.0/(fromIntegral nfft * fs)*) sumArry)
+  !out <- Repa.computeP (Repa.map (1.0/(fromIntegral nfft * fs * fromIntegral maxitr)*) sumArry)
   let !ftrain = UV.fromList $ Prelude.map (fs/fromIntegral nfft *) [0..fromIntegral nfft-1.0]
-  return $ UV.zip (toUnboxed out) ftrain
+  return $ UV.zip ftrain (toUnboxed out)
   where
     go [] = return $ Repa.fromListUnboxed (Z:.0) []
     go (x:xs) = do
