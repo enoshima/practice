@@ -8,14 +8,14 @@
 -
 - -}
 
-import Function
-import WindowFunction
-import WindowType
+--import Function
+--import WindowFunction
+--import WindowType
 import qualified Data.Vector.Unboxed as UV
 import HasKAL.FrameUtils.FrameUtils
 import HasKAL.SignalProcessingUtils.Resampling
 import qualified HasKAL.PlotUtils.HROOT.PlotGraph as HR
-
+import HasKAL.SpectrumUtils.SpectrumUtils
 import Data.Time
 
 main = do
@@ -27,15 +27,17 @@ main = do
 
 
   print "{- downsampling -}"
-  let  fs = 4096 :: Double
-  let  x = UV.fromList $ take (truncate (fs*10)) $ downsample fs' fs $ map realToFrac (eval fdata)
+  let fs = 4096 :: Double
+  let x = UV.fromList $ take (truncate (fs*10)) $ downsample fs' fs $ map realToFrac (eval fdata)
+      y = UV.toList x
 
 
   print "{- calculate spectrum -}"
   let nfft = truncate fs :: Int
-  out <- gwpsd x nfft fs
-  let (fvec, psdvec) = UV.unzip out
-  HR.plot HR.LogXY HR.Line 1 ("frequency","Spectrum") 0.05 "psd" "test_psd.png" ((0,0),(0,0))
-    $ Prelude.zip (UV.toList fvec) (UV.toList psdvec)
+--  out <- gwpsd x nfft fs
+--  let (fvec, psdvec) = UV.unzip out
+--  HR.plot HR.LogXY HR.Line 1 ("frequency","Spectrum") 0.05 "psd" "test_psd.png" ((0,0),(0,0))
+--    $ Prelude.zip (UV.toList fvec) (UV.toList psdvec)
 
-
+  HR.plot HR.LogXY HR.Line 1 ("frequency", "Spectrum") 0.05 "psd" "test_psdorig.png" ((0, 0), (0, 0))
+    $ gwpsd y nfft fs

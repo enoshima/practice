@@ -411,7 +411,7 @@ dwt order wavelet wrapper indata
 scalarmult :: Num t => t -> [t] -> [t]
 scalarmult s = map (s *)
 
- 
+
 -- | Similar to zipWith (+), but the result is always as long as the second
 -- argument.  "Missing" elements of the first list are taken as zero.
 asymzipadd :: Num t => [t] -> [t] -> [t]
