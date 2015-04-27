@@ -28,7 +28,7 @@ import Numeric.LinearAlgebra
 import Numeric.GSL.Fourier
 
 import Data.Time
-
+--import System.IO.Unsafe (unsafePerformIO)
 
 main = do
 
@@ -37,7 +37,9 @@ main = do
 
   t1 <- getCurrentTime
   print "{- input data information -}"
-  let fname = "H-H2_RDS_C03_L2-877201786-128.gwf"
+--  let fname = "H-H2_RDS_C03_L2-877201786-128.gwf"
+  flist <- readFile "files.cache"
+  let fname = head.lines $ flist
   [(chname,  _)] <- getChannelList fname
   fdata <- readFrame chname fname
   fs' <- getSamplingFrequency fname chname
@@ -80,7 +82,7 @@ main = do
   t7 <- getCurrentTime
   print "{- do injection -}"
   let injected = doInjection' ligodata injdetresp
-  HR.plot HR.Linear HR.Line ("time",  "amplitude") "injected" "testburst_injected.png" ((0, 0), (0, 0)) $ zip [0, 1..] $ toList (gwdata injected)
+  HR.plot HR.Linear HR.Line 1 HR.RED ("time",  "amplitude") 0.05 "injected" "testburst_injected.png" ((0, 0), (0, 0)) $ zip [0, 1..] $ toList (gwdata injected)
 
   t8 <- getCurrentTime
   print $ diffUTCTime t8 t7
@@ -104,8 +106,8 @@ main = do
   print "{- apply whitening filter -}"
   let whnWaveData = dropWaveData (2*nC) $ whiteningWaveData whnParam injected
 
-  HR.plot HR.Linear HR.Line ("time",  "amplitude") "whitened" "testburst_conditioned.png" ((0, 0), (0, 0)) $ zip [0, 1..] $ toList (gwdata whnWaveData)
-  HR.plot HR.LogXY HR.Line ("frequency",  "Spectrum") "whitened psd" "testburst_conditioned_psd.png" ((0, 0), (0, 0)) $ gwpsd (toList (gwdata whnWaveData)) nfft fs
+  HR.plot HR.Linear HR.Line 1 HR.RED ("time", "amplitude") 0.05 "whitened" "testburst_conditioned.png" ((0, 0), (0, 0)) $ zip [0, 1..] $ toList (gwdata whnWaveData)
+  HR.plot HR.LogXY HR.Line 1 HR.RED ("frequency", "Spectrum") 0.05 "whitened psd" "testburst_conditioned_psd.png" ((0, 0), (0, 0)) $ gwpsd (toList (gwdata whnWaveData)) nfft fs
   t12 <- getCurrentTime
   print $ diffUTCTime t12 t11
 
@@ -122,7 +124,7 @@ main = do
       refpsd2 = scale sigma $ subVector 0 fs2 refpsd
       refpsd2s= subVector 0 fs2 refpsd
 
-  HR.plot HR.LogXY HR.Line ("frequency",  "Spectrum") "ref psd" "testburst_refpsd.png" ((0, 0), (0, 0))
+  HR.plot HR.LogXY HR.Line 1 HR.RED ("frequency",  "Spectrum") 0.05 "ref psd" "testburst_refpsd.png" ((0, 0), (0, 0))
     $ zip [0..] (toList refpsd2)
     -- todo : functionalization
   let snrMatF = scale (fs/fromIntegral nfreq) $ linspace nfreq (0, fromIntegral nfreq)
@@ -160,7 +162,7 @@ main = do
         ) [0..ntime-1]
       snrMats = (snrMatT, snrMatF, snrMatPs)
 
-  HR.plot HR.Linear HR.Line ("frequency [Hz]",  "nu factor") " " "testburst_nu.png" ((0, 0), (0, 0))
+  HR.plot HR.Linear HR.Line 1 HR.RED ("frequency [Hz]",  "nu factor") 0.05 " " "testburst_nu.png" ((0, 0), (0, 0))
     $ zip [0, 16..2048]  (toList nufactor)
 
 
