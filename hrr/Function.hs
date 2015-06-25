@@ -1,8 +1,10 @@
 {-# LANGUAGE MonadComprehensions, ScopedTypeVariables #-}
 
 module Function
-( haskalDataFind
-, haskalDataPoint
+( kagraDataFind
+, kagraDataPoint
+, kagraDataFindCore
+, kagraDataPointCore
 )
 where
 
@@ -32,10 +34,26 @@ import Framedb                    (framedb)
 import qualified Framedb as Frame
 
 
-haskalDataFind :: Int32 -> Int32 -> String -> IO [String]
-haskalDataFind gpsstrt duration chname =
+kagraDataFind :: Int32 -> Int32 -> String -> IO [String]
+kagraDataFind gpsstrt duration chname = do
+  flist <- kagraDataFindCore gpsstrt duration chname
+  return $ [ u
+           | (Just u) <- flist
+           ]
+
+
+kagraDataPoint :: Int32 -> String -> IO [String]
+kagraDataPoint gpstime chname = do
+  flist <- kagraDataPointCore gpstime chname
+  return $ [ x
+           | (Just x) <- flist
+           ]
+
+
+kagraDataFindCore :: Int32 -> Int32 -> String -> IO [Maybe String]
+kagraDataFindCore gpsstrt duration chname =
   handleSqlError' $ withConnectionIO connect $ \conn -> do
-  setSqlMode conn
+--  setSqlMode conn
   outputResults conn core
   where
     outputResults c q = runQuery' c (relationalQuery q) ()
@@ -45,23 +63,23 @@ haskalDataFind gpsstrt duration chname =
     channel = relation
       [ u
       | u <- query framedb
-      , () <- wheres $ u ! Frame.chname' .=. value chname
+      , () <- wheres $ u ! Frame.chname' .=. value (Just chname)
       ]
 
-    core :: Relation () String
+    core :: Relation () (Maybe String)
     core = relation $ do
       ch <- query channel
-      wheres $ not' ((ch ! Frame.gpsStart' .<=. value gpsstrt
-        `and'` ch ! Frame.gpsStop'  .<=. value gpsstrt)
-        `or'` (ch ! Frame.gpsStart' .>=. value gpsend
-        `and'` ch ! Frame.gpsStop'  .>=. value gpsend))
+      wheres $ not' ((ch ! Frame.gpsStart' .<=. value (Just gpsstrt)
+        `and'` ch ! Frame.gpsStop'  .<=. value (Just gpsstrt))
+        `or'` (ch ! Frame.gpsStart' .>=. value (Just gpsend)
+        `and'` ch ! Frame.gpsStop'  .>=. value (Just gpsend)))
       return $ ch ! Frame.fname'
 
 
-haskalDataPoint :: Int32 -> String -> IO [String]
-haskalDataPoint gpstime chname =
+kagraDataPointCore :: Int32 -> String -> IO [Maybe String]
+kagraDataPointCore gpstime chname =
   handleSqlError' $ withConnectionIO connect $ \conn -> do
-  setSqlMode conn
+--  setSqlMode conn
   outputResults conn core
   where
     outputResults c q = runQuery' c (relationalQuery q) ()
@@ -69,14 +87,14 @@ haskalDataPoint gpstime chname =
     channel = relation
       [ u
       | u <- query framedb
-      , () <- wheres $ u ! Frame.chname' .=. value chname
+      , () <- wheres $ u ! Frame.chname' .=. value (Just chname)
       ]
 
-    core :: Relation () String
+    core :: Relation () (Maybe String)
     core = relation $ do
       ch <- query channel
-      wheres $ ch ! Frame.gpsStart' .<=. value gpstime
-      wheres $ ch ! Frame.gpsStop'  .>=. value gpstime
+      wheres $ ch ! Frame.gpsStart' .<=. value (Just gpstime)
+      wheres $ ch ! Frame.gpsStop'  .>=. value (Just gpstime)
       return $ ch ! Frame.fname'
 
 
@@ -91,4 +109,5 @@ setSqlMode conn = do
     _          ->
       error "failed to get 'sql_mode'"
   runRaw conn $ "SET SESSION sql_mode = '" ++ newmode ++ "'"
+
 

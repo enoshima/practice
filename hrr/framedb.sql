@@ -7,7 +7,7 @@ CREATE TABLE KAGRA.framedb (
     , gps_start     INT NOT NULL DEFAULT 0
     , gps_stop      INT NOT NULL DEFAULT 0
     , chname        VARCHAR(100) NOT NULL
-    , sampling_rate INT NOT NULL DEFAULT 0
+    , sampling_rate DOUBLE NOT NULL DEFAULT 0
     , dq_flag       INT(1) NOT NULL DEFAULT 0
 );
 
