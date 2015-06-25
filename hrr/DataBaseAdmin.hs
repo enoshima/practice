@@ -1,6 +1,6 @@
 
 
-{-# LANGUAGE MonadComprehensions, ScopedTypeVariables, TemplateHaskell, MultiParamTypeClasses, FlexibleInstances #-}
+{-# LANGUAGE MonadComprehensions, ScopedTypeVariables, TemplateHaskell, MultiParamTypeClasses, FlexibleInstances, BangPatterns #-}
 
 
 module DataBaseAdmin
@@ -16,11 +16,11 @@ import Database.HDBC.Record (runInsertQuery, runInsert)
 import Database.HDBC.Query.TH
 
 import HasKAL.FrameUtils.FrameUtils (getGPSTime, getChannelList, getSamplingFrequency)
-
+import HasKAL.Misc.StrictMapping (forM')
 import Data.List (isInfixOf, (!!))
 import Data.Int (Int32)
 
-import Control.Monad (forM)
+import Control.Monad (forM_)
 import DataSource (connect)
 import Framedb (Framedb, framedb, tableOfFramedb)
 import qualified Framedb
@@ -30,23 +30,21 @@ import System.Environment (getArgs)
 
 
 updateFrameDB fname = do
---  let fname = "/data/kagra/xend/test/R0201/K-K1_R-1113209036-32.gwf"
---  args <- getArgs
---  let fname = head args
   (gpsstrt', gpsstrtnano', duration') <- getGPSTime fname
   let gpsstrt = fromIntegral gpsstrt' :: Int32
       duration = fromIntegral (truncate duration') :: Int32
       gpsend = gpsstrt + duration
   chfs <- getChannelList fname
-
-  handleSqlError' $ withConnectionIO connect $ \conn -> do
+--  getChannelList fname
+  needless <- forM_ chfs $ \(ch,  fs) -> handleSqlError' $ withConnectionIO connect $ \conn -> do
     setSqlMode conn
-    num <- forM chfs $ \(ch, fs) -> do
-      let sqlstate = insertFramedb (Just fname) (Just gpsstrt) (Just gpsend) (Just ch) (Just (truncate fs)) (Just 4)
-      putStrLn $ "SQL: " ++ show sqlstate
+--    forM_ chfs $ \(ch, fs) -> do
+    let sqlstate = insertFramedb (Just fname) (Just gpsstrt) (Just gpsend) (Just ch) (Just (truncate fs)) (Just 4)
+--      putStrLn $ "SQL: " ++ show sqlstate
       --runInsertQuery conn sqlstate ()
-      rawSystem "mysql" ["-uroot", "-e", show sqlstate]
+    rawSystem "mysql" ["-uroot", "-e", show sqlstate]
     rollback conn
+  return ()
 --    print num
 
 
