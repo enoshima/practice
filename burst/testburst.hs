@@ -6,22 +6,22 @@
  -
  -}
 
-
+import Control.Monad ((>>=))
 import Data.Time
+import qualified Data.Vector.Generic as G
 import HasKAL.DetectorUtils.Detector
-import HasKAL.FrameUtils.FrameUtils
+import HasKAL.FrameUtils.Function (readFrameV)
 import HasKAL.MonitorUtils.SRMon.StudentRayleighMon
 import HasKAL.MonitorUtils.SRMon.StudentRayleighThreshold
 import qualified HasKAL.PlotUtils.HROOT.PlotGraph as HR
 import qualified HasKAL.PlotUtils.HROOT.PlotGraph3D as HR3
-import HasKAL.SignalProcessingUtils.ButterWorth
-import qualified HasKAL.SignalProcessingUtils.FilterH as FH
-import HasKAL.SignalProcessingUtils.LinearPrediction
-import HasKAL.SignalProcessingUtils.Resampling
+import HasKAL.SignalProcessingUtils.ButterWorth (butter)
+import qualified HasKAL.SignalProcessingUtils.Filter as SP
+import HasKAL.SignalProcessingUtils.LinearPrediction (whiteningWaveData, lpefCoeffV)
+import HasKAL.SignalProcessingUtils.Resampling (downsampleV, downsampleWaveData)
 import HasKAL.SignalProcessingUtils.WindowFunction
 import HasKAL.SimulationUtils.Injection
 import HasKAL.SpectrumUtils.SpectrumUtils
-import HasKAL.FrameUtils.FrameUtils
 import HasKAL.TimeUtils
 import HasKAL.WaveUtils
 import Numeric.LinearAlgebra
@@ -29,6 +29,8 @@ import Numeric.GSL.Fourier
 
 import Data.Time
 --import System.IO.Unsafe (unsafePerformIO)
+import PipelineFunction
+
 
 main = do
 
@@ -38,12 +40,7 @@ main = do
   t1 <- getCurrentTime
   print "{- input data information -}"
 --  let fname = "H-H2_RDS_C03_L2-877201786-128.gwf"
-  flist <- readFile "files.cache"
-  let fname = head.lines $ flist
-  [(chname,  _)] <- getChannelList fname
-  fdata <- readFrame chname fname
-  fs' <- getSamplingFrequency fname chname
-  startgps <- getGPSTime fname
+  Just (chname, fdata, fs', startgps, _) <- dataInfo "cache.file"
   t2 <- getCurrentTime
   print $ diffUTCTime t2 t1
 
@@ -51,14 +48,14 @@ main = do
   t3 <- getCurrentTime
   print "{- downsampling -}"
   let fs = 4096 :: Double
-      x = take (truncate (fs*10)) $ downsample fs' fs $ map realToFrac (eval fdata)
-      stopgps = formatGPS $ deformatGPS startgps + 1/fs*fromIntegral (length x)
+      x = G.take (truncate (fs*10)) $ downsampleV fs' fs fdata
+      stopgps = formatGPS $ deformatGPS startgps + 1/fs*fromIntegral (G.length x)
       {- construct WaveData DataType -}
-      ligodata = mkLIGOHanfordWaveData "h-of-t" fs startgps stopgps $ fromList x
+      ligodata = mkLIGOHanfordWaveData "h-of-t" fs startgps stopgps x
 
-      xs = downsample fs' fs $ map realToFrac (eval fdata)
-      stopgpss = formatGPS $ deformatGPS startgps + 1/fs*fromIntegral (length xs)
-      ligodatas = mkLIGOHanfordWaveData "h-of-t" fs startgps stopgpss $ fromList xs
+      xs = downsampleV fs' fs fdata
+      stopgpss = formatGPS $ deformatGPS startgps + 1/fs*fromIntegral (G.length xs)
+      ligodatas = mkLIGOHanfordWaveData "h-of-t" fs startgps stopgpss xs
 
 
   print $ take 5 $ toList (gwdata ligodata)
@@ -95,8 +92,8 @@ main = do
   t9 <- getCurrentTime
   print "{- whitening filter coefficients -}"
   let trlen = truncate fs
-      trdat = take trlen $ toList $ gwdata injected
-      whnParam = lpefCoeff nC (gwpsd trdat nfft fs)
+      trdat = G.take trlen $ gwdata injected
+      whnParam = lpefCoeffV nC (gwpsdV trdat nfft fs)
 
   print (snd whnParam)
   t10 <- getCurrentTime
@@ -144,16 +141,17 @@ main = do
 
   t15 <- getCurrentTime
   print "{- Time-Frequency SNR Map using Student-t noise modeling -}"
-  let nset = floor (fromIntegral (dim (gwdata ligodatas))/(fromIntegral nfreq))
-      noff = take nset
-        $ map (\x->toList x)
-        $ map (\x->sqrt $ snd $ (gwpsdV x nfreq fs))
-        $ takesV (replicate nset nfreq) (gwdata ligodatas)
-      numF = 1
+  let stride = 256
+      hfs = gwspectrogramV 0 stride fs (gwdata ligodatas)
+      clusteringN = 1
+      shiftN = 20
+      chunkN = 20
+      aveN = 20
 
-  let refpsds = snd $ gwpsdV (gwdata ligodatas) nfreq fs
-      nu = flip (!!) 0 $ studentRayleighMon' MLE nset 0 numF (toList refpsds) noff
-      nufactor = fromList $ map (\x-> 1/sigma*studentThreshold sigma x) nu
+  let refpsds = gwpsdV (subVector 0 (stride*aveN) (gwdata ligodatas)) stride fs
+      (_, _, nuMatrix) = studentRayleighMonV MLE fs stride chunkN shiftN clusteringN refpsds hfs
+      nu = flip (!!) 0 $ toColumns nuMatrix
+      nufactor = fromList $ map (\x-> 1/sigma*studentThreshold sigma x) $ toList nu
       snrMatPs = fromColumns
         $ map (\i->zipVectorWith (/)
         (
@@ -200,14 +198,14 @@ main = do
   print $ diffUTCTime t18 t17
 
   print "{- plot SNR-spectrogram -}"
-  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNR Spectrogram") "testburst_snrSpec_sigma2.png" $ plotFormatedSpectogram snrMat'
-  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNRs Spectrogram") "testburst_snrSpec_student_sigma2.png" $ plotFormatedSpectogram snrMats'
+  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNR Spectrogram") "testburst_snrSpec_sigma2.png" ((0, 0), (0, 0)) $ plotFormatedSpectogram snrMat'
+  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNRs Spectrogram") "testburst_snrSpec_student_sigma2.png" ((0, 0), (0, 0)) $ plotFormatedSpectogram snrMats'
 
-  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNR>5 Spectrogram") "testburst_snrSpec_t3_sigma2.png" $ plotFormatedSpectogram mg4
-  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNRs>5 Spectrogram") "testburst_snrSpec_student_t3_sigma2.png" $ plotFormatedSpectogram ms4
+  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNR>5 Spectrogram") "testburst_snrSpec_t3_sigma2.png" ((0, 0), (0, 0)) $ plotFormatedSpectogram mg4
+  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNRs>5 Spectrogram") "testburst_snrSpec_student_t3_sigma2.png" ((0, 0), (0, 0)) $ plotFormatedSpectogram ms4
 
-  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNR Spectrogram") "testburst_snrSpec_norm_thr025_sigma2.png" $ plotFormatedSpectogram normalizemg
-  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNRs Spectrogram") "testburst_snrSpec_nrm_student_thr025_sigma2.png" $ plotFormatedSpectogram normalizems
+  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNR Spectrogram") "testburst_snrSpec_norm_thr025_sigma2.png" ((0, 0), (0, 0)) $ plotFormatedSpectogram normalizemg
+  HR3.spectrogram HR3.LogY HR3.COLZ " " ("SNRs Spectrogram") "testburst_snrSpec_nrm_student_thr025_sigma2.png" ((0, 0), (0, 0)) $ plotFormatedSpectogram normalizems
 
 
 
