@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns #-}
+--{-# LANGUAGE BangPatterns #-}
 
 
 {-
@@ -38,6 +38,7 @@ import Data.List (nub)
 import PipelineFunction
 import FFTW
 import RegisterBurstEvent
+import Control.DeepSeq (deepseq)
 
 
 
@@ -55,7 +56,7 @@ main = do
   let chname = "H2:LSC-STRAIN"
 --  Just [(fdata, fs', startgps, _)] <- dataInfo "cache.file" "H2:LSC-STRAIN"
   Just (fdata, fs', startgps, dt) <- frameInfo fname "H2:LSC-STRAIN"
-
+--  fdata `deepseq` return()
   t2 <- getCurrentTime
   print $ diffUTCTime t2 t1
 
@@ -73,7 +74,7 @@ main = do
       stopgpss = formatGPS $ deformatGPS startgps + 1/fs*fromIntegral (G.length xs)
       ligodatas = W.mkLIGOHanfordWaveData "h-of-t" fs startgps stopgpss xs
 
-
+--  ligodatas `deepseq` return()
   print $ take 5 $ toList (W.gwdata ligodata)
   t4 <- getCurrentTime
   print $ diffUTCTime t4 t3
@@ -86,7 +87,7 @@ main = do
       injgps = (877201793, 0) :: GPSTIME
       injdetresp = downsampleWaveData fs
                  $ I.injDetectorResponse DET.LIGO_Hanford srctype injgps :: W.WaveData
-
+--  injdetresp `deepseq` return()
   print $ take 5 $ toList (W.gwdata injdetresp)
   t6 <- getCurrentTime
   print $ diffUTCTime t6 t5
@@ -94,7 +95,7 @@ main = do
 
   t7 <- getCurrentTime
   print "{- do injection -}"
-  let !injected = I.doInjection' ligodata injdetresp
+  let injected = I.doInjection' ligodata injdetresp
 --  HR.plot HR.Linear HR.Line 1 HR.RED
 --    ("time",  "amplitude")
 --    0.05
@@ -102,7 +103,7 @@ main = do
 --    "testburst_injected.png"
 --    ((0, 0), (0, 0))
 --    $ zip [0, 1..] $ toList (W.gwdata injected)
-
+--  injected `deepseq` return()
   t8 <- getCurrentTime
   print $ diffUTCTime t8 t7
 
@@ -116,14 +117,16 @@ main = do
   let trlen = truncate fs
       trdat = G.take trlen $ W.gwdata injected
       whnParam = lpefCoeffV nC (gwpsdV trdat nfft fs)
-
+--  whnParam `deepseq` return()
   print (snd whnParam)
   t10 <- getCurrentTime
   print $ diffUTCTime t10 t9
 
+
   t11 <- getCurrentTime
   print "{- apply whitening filter -}"
-  let !whnWaveData = W.dropWaveData (2*nC) $ whiteningWaveData whnParam injected
+  let whnWaveData = W.dropWaveData (2*nC) $ whiteningWaveData whnParam injected
+--  whnWaveData `deepseq` return()
   t12 <- getCurrentTime
   print $ diffUTCTime t12 t11
 
@@ -142,6 +145,7 @@ main = do
 --    "figs/testburst_conditioned_psd.png"
 --    ((0, 0), (0, 0))
 --    $ gwpsd (toList (W.gwdata whnWaveData)) nfft fs
+
 
   t13 <- getCurrentTime
   print "{- Time-Frequency SNR Map -}"
@@ -163,10 +167,13 @@ main = do
         subVector 0 fs2 $ snd $ gwpsdV (subVector (nfreq*i) nfreq (W.gwdata whnWaveData)) nfreq fs)
         refpsd2
         )) [0..ntime-1]) [0..fs2-1] :: Matrix Double
+--  snrMatP' `deepseq` return()
   t14 <- getCurrentTime
   print $ diffUTCTime t14 t13
 
+
   tx1 <- getCurrentTime
+  print "{- seedless clustering -}"
   let dcted' = dct2d snrMatP'
       ncol = cols dcted'
       nrow = rows dcted'
@@ -175,6 +182,7 @@ main = do
       zeroElement = zeroElementr ++ zeroElementc
       dcted = updateMatrixElement dcted' zeroElement $ take (length zeroElement) [0, 0..]
       snrMatP = idct2d dcted
+--  snrMatP `deepseq` return()
   tx2 <- getCurrentTime
   print $ diffUTCTime tx2 tx1
 
@@ -185,8 +193,9 @@ main = do
   let cutoffF = 64.0
       thresIndex = head $ Numeric.LinearAlgebra.find (>=cutoffF) snrMatF
 --      snrMatDCT = (snrMatT, snrMatF, dcted')
-      !snrMat' = (snrMatT, subVector thresIndex (nrow-thresIndex) snrMatF, dropRows thresIndex snrMatP')
-      !snrMat = (snrMatT, subVector thresIndex (nrow-thresIndex) snrMatF, dropRows thresIndex snrMatP)
+      snrMat' = (snrMatT, subVector thresIndex (nrow-thresIndex) snrMatF, dropRows thresIndex snrMatP')
+      snrMat = (snrMatT, subVector thresIndex (nrow-thresIndex) snrMatF, dropRows thresIndex snrMatP)
+--  snrMat' `deepseq` return()
   t16 <- getCurrentTime
   print $ diffUTCTime t16 t15
 
@@ -209,32 +218,42 @@ main = do
         $ updateMatrixElement mg' thres4MG' (replicate (length thres4MG') 0.0)
       mg4 = updateSpectrogramSpec snrMat
         $ updateMatrixElement mg thres4MG (replicate (length thres4MG) 0.0)
+--  mg `deepseq` return()
   t18 <- getCurrentTime
   print $ diffUTCTime t18 t17
 
 
-  print "{- remove one pixel -}"
+  print "{- clustering -}"
   tx2 <- getCurrentTime
   let thrsed = Numeric.LinearAlgebra.find (>=3.0) mg
       survivor = nub $ excludeOnePixelIsland thrsed
       excludedIndx = Set.toList $ Set.difference (Set.fromList thrsed) (Set.fromList survivor)
       newM = updateSpectrogramSpec snrMat
         $ updateMatrixElement mg excludedIndx (replicate (length excludedIndx) 0.0)
+--  newM `deepseq` return()
   tx3 <- getCurrentTime
   print $ diffUTCTime tx3 tx2
 
 
+  print "{- finished -}"
+  te <- getCurrentTime
+  print $ diffUTCTime te t1
+
+
+  print "{- registering triggered events -}"
+  tx4 <- getCurrentTime
   let (trigT, trigF, trigM) = newM
       indxBlack = maxIndex trigM
       tsnr = trigM @@> indxBlack
-      gps = formatGPS $ trigT @> fst indxBlack
+      gps' = formatGPS $ trigT @> fst indxBlack
+      gps = (fst (W.startGPSTime whnWaveData)+fst gps', snd (W.startGPSTime whnWaveData)+snd gps')
       gpss = fromIntegral $ fst gps :: Int32
       gpsn = fromIntegral $ snd gps :: Int32
       fc = trigF @> snd indxBlack
       tfs = fromIntegral $ truncate fs :: Int32
 
 
-      p  = TrigParam { detector = Just "XEND"
+      p  = TrigParam { detector = Just "XE"
                      , event_gpsstarts = Just gpss
                      , event_gpsstartn = Just gpsn
                      , event_gpsstops  = Nothing
@@ -258,6 +277,14 @@ main = do
 
 
   registBurstEventCandidate2DB p
+
+  tx5 <- getCurrentTime
+  print $ diffUTCTime t5 t4
+
+
+
+
+
 
 
 --  print "{- plot SNR-spectrogram -}"
