@@ -35,7 +35,7 @@ import PipelineFunction
 registBurstEventCandidate2DB p = handleSqlError' $ withConnectionIO connect $ \conn -> do
     setSqlMode conn
     let sqlstate = insertBurstdb (detector p) (event_gpsstarts p) (event_gpsstartn p) (event_gpsstops p) (event_gpsstopn p) (duration p) (energy p) (central_frequency p) (snr p) (significance p) (latitude p) (longitude p) (chname p) (sampling_rate p) (segment_gpsstarts p) (segment_gpsstartn p) (segment_gpsstops p) (segment_gpsstopn p) (dq_flag p) (pipeline p)
---      putStrLn $ "SQL: " ++ show sqlstate
+--    putStrLn $ "SQL: " ++ show sqlstate
       --runInsertQuery conn sqlstate ()
     rawSystem "mysql" ["-uroot", "-e", show sqlstate]
     rollback conn
