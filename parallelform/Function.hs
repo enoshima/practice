@@ -44,9 +44,9 @@ func gain alpha = do
   let hal = head alpha
       hA  = head gain
    in case (imagPart hal ==0) of
-        True -> ([2*realPart hA, -2*realPart (hA * conjugate hal)]
+        False -> ([2*realPart hA, -2*realPart (hA * conjugate hal)]
           , [1, -2*realPart hal, (realPart (abs hal))**2]) : func (drop 2 gain) (drop 2 alpha)
-        False-> ([realPart (hA), 0], [1, -1*realPart hal, 0]) : func (tail gain) (tail alpha)
+        True  -> ([realPart (hA), 0], [1, -1*realPart hal, 0]) : func (tail gain) (tail alpha)
 
 
 
