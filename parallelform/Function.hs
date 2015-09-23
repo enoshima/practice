@@ -21,38 +21,41 @@ polyval (x:xs) x0 = x + x0 * polyval xs x0
 
 
 -- | calculating Toeplitz matrix
--- |
+-- | output : list of column [list]
 toeplitz :: Num a => [a] -> [a] -> [[a]]
 toeplitz c r = do
   let nrow = length c
       ncol = length r
-   in map (\i -> go c r i ) [0..nrow-1]
+   in map (\i -> go c r i ) [0..ncol-1]
    where
      go x y i
        | i==0 = x
-       | otherwise = (reverse . take i $ drop 1 y) ++ drop i c
+       | otherwise = take nx $ (reverse . take i $ drop 1 y) ++ reverse (drop i (reverse c))
+       where nx = length x
 
 
 tf2rparallelForm :: ([Double], [Double]) -> ([Double], [([Double], [Double])])
 tf2rparallelForm (num, denom) = do
   let (c, gain, alpha) = tf2cparallelForm (num, denom)
    in (c, func gain alpha)
-
-func :: [Complex Double] -> [Complex Double] -> [([Double], [Double])]
-func _ [] = []
-func gain alpha = do
-  let hal = head alpha
-      hA  = head gain
-   in case (imagPart hal ==0) of
-        False -> ([2*realPart hA, -2*realPart (hA * conjugate hal)]
-          , [1, -2*realPart hal, (realPart (abs hal))**2]) : func (drop 2 gain) (drop 2 alpha)
-        True  -> ([realPart (hA), 0], [1, -1*realPart hal, 0]) : func (tail gain) (tail alpha)
+   where
+     func :: [Complex Double] -> [Complex Double] -> [([Double], [Double])]
+     func _ [] = []
+     func gain alpha = do
+       let hal = head alpha
+           hA  = head gain
+        in case (imagPart hal ==0) of
+             False -> ([2*realPart hA, -2*realPart (hA * conjugate hal)]
+               , [1, -2*realPart hal, (realPart (abs hal))**2]) : func (drop 2 gain) (drop 2 alpha)
+             True  -> ([realPart (hA), 0], [1, -1*realPart hal, 0]) : func (tail gain) (tail alpha)
 
 
 
 tf2cparallelForm :: ([Double], [Double]) -> ([Double], [Complex Double], [Complex Double])
-tf2cparallelForm (num, denom) = do
-  let p = length denom - 1
+tf2cparallelForm (num', denom') = do
+  let num = map (/head denom') num'
+      denom = map (/head denom') denom'
+      p = length denom - 1
       q = length num - 1
       (c, d) = case (q >= p) of
         True -> do
@@ -65,12 +68,12 @@ tf2cparallelForm (num, denom) = do
               eye = ident p :: Matrix Double
               temp' = fromBlocks [[tempM, fromRows (toRows eye ++ zeros)]]
               temp''= temp' <\> numM
-              c = toList . head . toRows $ subMatrix (0, 0) (1, q-p+1) temp''
-              d' = toList . head . toRows $ subMatrix (0, q-p+1) (1, p) temp''
+              c = toList . head . toColumns $ subMatrix (0, 0) (q-p+1, 1) temp''
+              d' = toList . head . toColumns $ subMatrix (q-p+1, 0) (p, 1) temp''
            in (c, d2clist d')
         False -> do
           let c = []
-              d' = num ++ replicate (p-q+1) (0::Double)
+              d' = num ++ replicate (p-q-1) (0::Double)
            in (c, d2clist d')
 
   let alpha = polySolve $ reverse denom
@@ -78,8 +81,7 @@ tf2cparallelForm (num, denom) = do
         where
           go i = do
             let scale = product [alpha!!i - x | x <- alpha, x /= alpha!!i]
-             in (polyval d (alpha!!i)) / scale
-
+             in (polyval (reverse d) (alpha!!i)) / scale
    in (c, gpf, alpha)
 
 
