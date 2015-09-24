@@ -1,13 +1,20 @@
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include "sosfilter.h"
 
 
 
-void RunIIRBiquadForm1(double *Input, double *Output, int NumSigPts)
+
+void sosfilter (double *input, unsigned inputlen, double *num_coeff0, double *num_coeff1,double *num_coeff2, double *denom_coeff0, double *denom_coeff1, double *denom_coeff2, unsigned nsect, double *output)
 {
  double y;
  int j, k;
+ double RegX1[nsect], RegX2[nsect], RegY1[nsect], RegY2[nsect];
 
- for(j=0; j<REG_SIZE; j++) // Init the shift registers.
+ for(j=0; j<nsect; j++)
   {
    RegX1[j] = 0.0;
    RegX2[j] = 0.0;
@@ -15,25 +22,24 @@ void RunIIRBiquadForm1(double *Input, double *Output, int NumSigPts)
    RegY2[j] = 0.0;
   }
 
- for(j=0; j<NumSigPts; j++)
+ for(j=0; j<inputlen; j++)
   {
-   y = SectCalcForm1(0, Input[j]);
-   for(k=1; k<NumSections; k++)
+   y = sosform1(0, input[j], num_coeff0, num_coeff1, num_coeff2, denom_coeff0, denom_coeff1, denom_coeff2, RegX1, RegX2, RegY1, RegY2);
+   for(k=1; k<nsect; k++)
   {
-   y = SectCalcForm1(k, y);
+   y = sosform1(k, y, num_coeff0, num_coeff1, num_coeff2, denom_coeff0, denom_coeff1, denom_coeff2, RegX1, RegX2, RegY1, RegY2);
   }
-   Output[j] = y;
+   output[j] = y;
   }
 }
 
 
-
-double SectCalcForm1(int k, double x)
+double sosform1(int k, double x, double *num_coeff0, double *num_coeff1, double *num_coeff2, double *denom_coeff0, double *denom_coeff1, double *denom_coeff2, double *RegX1, double *RegX2, double *RegY1, double *RegY2)
 {
- double y, CenterTap;
+ double y, point;
 
- CenterTap = x * b0[k] + b1[k] * RegX1[k] + b2[k] * RegX2[k];
- y = a0[k] * CenterTap - a1[k] * RegY1[k] - a2[k] * RegY2[k];
+ point = x * num_coeff0[k] + num_coeff1[k] * RegX1[k] + num_coeff2[k] * RegX2[k];
+ y = denom_coeff0[k] * point - denom_coeff1[k] * RegY1[k] - denom_coeff2[k] * RegY2[k];
 
  RegX2[k] = RegX1[k];
  RegX1[k] = x;
