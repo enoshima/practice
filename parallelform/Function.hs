@@ -4,14 +4,15 @@
 module Function
 ( polyval
 , toeplitz
-, tf2cparallelForm
-, tf2rparallelForm
+, tf2cparallel
+, tf2rparallel
 ) where
 
 
 import Numeric.LinearAlgebra
 import Numeric.GSL.Polynomials(polySolve)
 import Data.Complex
+
 
 -- | calculating polynomials a0 + a1x^1+ .. + anx^n at x = x0
 -- | polyval [a0, a1, a2..an] x0
@@ -34,9 +35,9 @@ toeplitz c r = do
        where nx = length x
 
 
-tf2rparallelForm :: ([Double], [Double]) -> ([Double], [([Double], [Double])])
-tf2rparallelForm (num, denom) = do
-  let (c, gain, alpha) = tf2cparallelForm (num, denom)
+tf2rparallel :: ([Double], [Double]) -> ([Double], [([Double], [Double])])
+tf2rparallel (num, denom) = do
+  let (c, gain, alpha) = tf2cparallel (num, denom)
    in (c, func gain alpha)
    where
      func :: [Complex Double] -> [Complex Double] -> [([Double], [Double])]
@@ -50,9 +51,8 @@ tf2rparallelForm (num, denom) = do
              True  -> ([realPart (hA), 0], [1, -1*realPart hal, 0]) : func (tail gain) (tail alpha)
 
 
-
-tf2cparallelForm :: ([Double], [Double]) -> ([Double], [Complex Double], [Complex Double])
-tf2cparallelForm (num', denom') = do
+tf2cparallel :: ([Double], [Double]) -> ([Double], [Complex Double], [Complex Double])
+tf2cparallel (num', denom') = do
   let num = map (/head denom') num'
       denom = map (/head denom') denom'
       p = length denom - 1
@@ -83,6 +83,20 @@ tf2cparallelForm (num', denom') = do
             let scale = product [alpha!!i - x | x <- alpha, x /= alpha!!i]
              in (polyval (reverse d) (alpha!!i)) / scale
    in (c, gpf, alpha)
+
+
+tf2cascade :: ([Double], [Double]) -> ([Double], [([Double], [Double])])
+tf2cascade (num, denom) = do
+  let zeroz = polySolve $ reverse num
+      polez = polySolve $ reverse denom
+      polec = [x | x <- polez, imagPart x>0]
+      poler = [x | x <- polez, imagPart x==0]
+      zeroc = [x | x <- zeroz, imagPart x>0]
+      zeror = [x | x <- zeroz, imagPart x==0]
+
+
+
+
 
 
 d2clist :: [Double] -> [Complex Double]
