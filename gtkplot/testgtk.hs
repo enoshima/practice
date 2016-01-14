@@ -71,7 +71,7 @@ newDataWidget param graphWindowsToBeKilled = do
   _ <- Gtk.onClicked buttonNew $ do
     graphWin <- newGraph
                 triggerYo
-                (chanName param)
+                (dataName param)
                 (chanSameSignalTree param)
                 (chanToSignalTree param)
                 (chanMsgStore param)
